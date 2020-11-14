@@ -18,10 +18,12 @@ inputs:
     encrypted: true
   web1Hostname:
     type: string
+    default: web
   web2Hostname:
     type: string
+    default: web
 resources:
-  Cloud_NSX_LoadBalancer_1:
+  webLB:
     type: Cloud.NSX.LoadBalancer
     properties:
       routes:
@@ -33,11 +35,10 @@ resources:
           port: 443
           instanceProtocol: HTTPS
           instancePort: 443
-      network: '${resource.Cloud_NSX_Network_1.id}'
+      network: '${resource.webNetwork.id}'
       instances:
         - '${resource.webServer1.id}'
         - '${resource.webServer2.id}'
-
   webServer1:
     type: Cloud.vSphere.Machine
     properties:
@@ -45,11 +46,12 @@ resources:
       flavor: '${input.size}'
       name: '${to_lower(input.web1Hostname)}'
       networks:
-        - network: '${resource.Cloud_NSX_Network_1.id}'
+        - network: '${resource.webNetwork.id}'
       cloudConfig: |
         hostname: ${input.web1Hostname}
         packages:
           - apache2
+          - git
 
         users:
           - name: ${input.username}
@@ -70,6 +72,17 @@ resources:
           - sudo ufw enable
           - sudo ufw reload
           - sudo apt upgrade -y
+          - sudo mkdir /var/www/home
+          - git clone https://github.com/thecloudxpert/web-app-demo.git /tmp/web-app-demo
+          - mv /tmp/web-app-demo/content /var/www/home
+          - mv /tmp/web-app-demo/config /etc/apache2/sites-available/
+          - chown -R www-data.www-data /var/www/home
+          - chmod -R 775 /var/www/home
+          - cd /etc/apache2/sites-available/
+          - sudo a2ensite home.conf
+          - sudo a2dissite 000-default.conf
+          - sudo systemctl reload apache2
+          - sudo systemctl restart apache2
   webServer2:
     type: Cloud.vSphere.Machine
     properties:
@@ -77,7 +90,7 @@ resources:
       flavor: '${input.size}'
       name: '${to_lower(input.web1Hostname)}'
       networks:
-        - network: '${resource.Cloud_NSX_Network_1.id}'
+        - network: '${resource.webNetwork.id}'
       cloudConfig: |
         hostname: ${input.web2Hostname}
         packages:
@@ -102,8 +115,7 @@ resources:
           - sudo ufw enable
           - sudo ufw reload
           - sudo apt upgrade -y
-
-  Cloud_NSX_Network_1:
+  webNetwork:
     type: Cloud.NSX.Network
     properties:
       networkType: existing
